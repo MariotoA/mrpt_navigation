@@ -142,8 +142,7 @@ class LocalObstaclesNode
 	ros::Publisher m_pub_local_map_pointcloud;
 	std::vector<ros::Subscriber>
 		m_subs_2dlaser;  //!< Subscriber to 2D laser scans
-	std::vector<ros::Subscriber>
-		m_subs_depthcam;  //!< Subscriber to depth camera data
+	std::vector<ros::Subscriber> m_subs_depthcam;  //!< Subscriber to depth camera data
 	tf::TransformListener m_tf_listener;  //!< Use to retrieve TF data
 	/**  @} */
 
@@ -433,6 +432,7 @@ class LocalObstaclesNode
 					relPose.asString().c_str());
 				// Insert obs:
 				if (ipt.observation)
+<<<<<<< HEAD
 				{
 					m_localmap_pts.insertObservationPtr(
 						ipt.observation, &relPose);
@@ -448,6 +448,17 @@ class LocalObstaclesNode
 						"[onDoPublish] Observation is empty, could not be "
 						"added to local map");
 				}
+=======
+                {
+					m_localmap_pts.insertObservationPtr(ipt.observation, &relPose);
+                } else if (ipt.point_map)
+                {
+                    m_localmap_pts.insertAnotherMap(ipt.point_map.get(), relPose);
+                } else
+                {
+                    ROS_DEBUG("[onDoPublish] Observation is empty, could not be added to local map");
+                }
+>>>>>>> aebc97af9e0394b1b917e77962f7017636182dc1
 
 			}  // end for
 		}
@@ -547,9 +558,14 @@ class LocalObstaclesNode
 			"source_topics_2dscan", m_source_topics_2dscan,
 			m_source_topics_2dscan);
 		m_localn.param("time_window", m_time_window, m_time_window);
+<<<<<<< HEAD
 		m_localn.param(
 			"source_topics_depthcam", m_source_topics_depthcam,
 			m_source_topics_depthcam);
+=======
+		m_localn.param("source_topics_depthcam", m_source_topics_depthcam,
+                        m_source_topics_depthcam);
+>>>>>>> aebc97af9e0394b1b917e77962f7017636182dc1
 		m_localn.param("publish_period", m_publish_period, m_publish_period);
 
 		ROS_ASSERT(m_time_window > m_publish_period);
@@ -566,8 +582,13 @@ class LocalObstaclesNode
 			m_source_topics_2dscan, m_subs_2dlaser,
 			&LocalObstaclesNode::onNewSensor_Laser2D);
 		nSubsTotal += this->subscribeToMultipleTopics(
+<<<<<<< HEAD
 			m_source_topics_depthcam, m_subs_depthcam,
 			&LocalObstaclesNode::onNewSensor_DepthCam);
+=======
+                        m_source_topics_depthcam, m_subs_depthcam,
+                        &LocalObstaclesNode::onNewSensor_DepthCam);
+>>>>>>> aebc97af9e0394b1b917e77962f7017636182dc1
 		ROS_INFO(
 			"Total number of sensor subscriptions: %u\n",
 			static_cast<unsigned int>(nSubsTotal));
