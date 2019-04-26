@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.1)
-set (CMAKE_CXX_STANDARD 14)
+ADD_COMPILE_OPTIONS("-std=c++17")
 project(mrpt_local_obstacles)
+
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -15,9 +18,10 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 ## System dependencies are found with CMake's conventions
-find_package(MRPT 1.5 REQUIRED obs maps slam gui)
-message(STATUS "MRPT_VERSION: ${MRPT_VERSION}")
 
+find_package(MRPT 1.9.9 REQUIRED obs maps slam gui)
+message(STATUS "MRPT_VERSION: ${MRPT_VERSION}")
+find_package(PCL REQUIRED COMPONENTS)
 if (CMAKE_COMPILER_IS_GNUCXX)
 	# High level of warnings.
 	# The -Wno-long-long is required in 64bit systems when including sytem headers.
@@ -55,8 +59,11 @@ catkin_package(
 ## Your package locations should be listed before other locations
 include_directories(
   ${catkin_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
 )
 
+link_directories(${PCL_LIBRARY_DIRS})
+add_definitions(${PCL_DEFINITIONS})
 ## Declare a cpp executable
 add_executable(${PROJECT_NAME}_node
   src/mrpt_local_obstacles_node.cpp
@@ -66,7 +73,9 @@ add_executable(${PROJECT_NAME}_node
 target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
   ${MRPT_LIBS}
+  ${PCL_LIBRARIES}
 )
+
 
 #############
 ## Install ##
