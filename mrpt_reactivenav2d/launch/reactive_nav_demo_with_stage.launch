@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<!-- Launch file principal para lanzar una simulación con Stage + MoveBse -->
+
+<launch>    
+
+    ### ROBOT SIMULATION ###
+    <param name="use_sim_time" value="true" />
+    <include file="$(find tfg_reactive_pkg)/launch/simbot_stage.launch" >
+        <arg name="world_file" value="-d $(find tfg_reactive_pkg)/maps/MAPIRlab_furniture.world" />
+        <arg name="disable_odometry" value="false" />
+    </include>      
+
+    ### NAVIGATION ###
+    <include file="$(find tfg_reactive_pkg)/launch/simbot_map_server.launch">
+        <arg name="map_file" value="$(find tfg_reactive_pkg)/maps/MAPIRlab_furniture.yaml" />
+    </include>
+    <include file="$(find tfg_reactive_pkg)/launch/simbot_fake_loc.launch" />
+        	<!-- Node: Local obstacles builder -->
+	<node pkg="mrpt_local_obstacles" type="mrpt_local_obstacles_node" name="mrpt_local_obstacles_node" output="screen">
+		<param name="source_topics_2dscan" value="laser_scan"/>
+		<param name="show_gui" value="false"/>
+		<!-- <param name="time_window" value="60"/> -->
+	</node>
+    <node pkg="shape_publisher" type="shape_publisher" name="shape_publisher" output="screen" launch-prefix="xterm -e">
+		<rosparam file="$(find shape_publisher)/shape_file/giraff.yaml" command="load" />
+	</node>
+	<node pkg="mrpt_reactivenav2d" type="mrpt_reactivenav2d_node" name="mrpt_reactivenav2d_node" output="screen">
+		<!-- *Important*: This external config file holds the most important navigation settings -->
+		<param name="cfg_file_reactive" value="$(find mrpt_reactivenav2d)/tutorial/reactive2d_config3.ini"/> 
+
+		<!-- This is to allow the reactive responsive to RVIZ GUI commands -->
+		<remap from="reactive_nav_goal" to="/move_base_simple/goal" />
+		<!-- Enable logs to ~/.ros/reactivenav.logs , use navlog-viewer to open them -->
+<!--		<param name="save_nav_log" value="true"/> -->
+		<param name="topic_robot_shape" value="/chassis_polygon" />
+	</node>
+    <node pkg="keyboard_control" type="keyboard_control" name="keyboard_control" />
+    ### RVIZ ###
+    <node name="rviz_player" pkg="rviz" type="rviz" args="-d $(find tfg_reactive_pkg)/rviz/simbot_reactive_only.rviz"/>
+
+</launch>

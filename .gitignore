@@ -4,3 +4,4 @@
 *~
 *.rawlog
 LOG_*
+*/.vscode/

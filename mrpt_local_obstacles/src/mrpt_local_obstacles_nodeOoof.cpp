@@ -61,10 +61,9 @@ using namespace mrpt::obs;
 #include <mrpt/opengl/stock_objects.h>
 
 #include <mrpt/version.h>
-#if MRPT_VERSION >= 0x199
+#if MRPT_VERSION>=0x199
 #include <mrpt/system/CTimeLogger.h>
 #include <mrpt/config/CConfigFile.h>
-#include <mrpt/core/aligned_allocator.h>
 using namespace mrpt::system;
 using namespace mrpt::config;
 using namespace mrpt::img;
@@ -73,19 +72,6 @@ using namespace mrpt::img;
 #include <mrpt/utils/CConfigFile.h>
 using namespace mrpt::utils;
 #endif
-
-
-
-#include <pcl/point_types.h>
-#include <pcl/conversions.h>
-#include <pcl/point_types.h>
-#include <pcl/filters/voxel_grid.h>
-#include <pcl/filters/extract_indices.h>
-#include <pcl/common/common.h>
-#include <pcl/common/centroid.h>
-#include <pcl_conversions/pcl_conversions.h>
-
-
 
 
 // The ROS node
@@ -111,7 +97,7 @@ class LocalObstaclesNode
 	std::string
 		m_topic_local_map_pointcloud;  //!< Default: "local_map_pointcloud"
 	std::string m_source_topics_2dscan;  //!< Default: "scan,laser1"
-	std::string m_source_topics_depthcam;  //!< Default: "depthcam"
+        std::string m_source_topics_depthcam; //!< Default: "depthcam"
 	double m_time_window;  //!< In secs (default: 0.2). This can't be smaller
 	//! than m_publish_period
 	double m_publish_period;  //!< In secs (default: 0.05). This can't be larger
@@ -123,7 +109,7 @@ class LocalObstaclesNode
 	struct TInfoPerTimeStep
 	{
 		CObservation::Ptr observation;
-		CSimplePointsMap::Ptr point_map;
+                CSimplePointsMap::Ptr point_map;
 		mrpt::poses::CPose3D robot_pose;
 	};
 	typedef std::multimap<double, TInfoPerTimeStep> TListObservations;
@@ -142,9 +128,9 @@ class LocalObstaclesNode
 	ros::Publisher m_pub_local_map_pointcloud;
 	std::vector<ros::Subscriber>
 		m_subs_2dlaser;  //!< Subscriber to 2D laser scans
-	std::vector<ros::Subscriber>
-		m_subs_depthcam;  //!< Subscriber to depth camera data
-	tf::TransformListener m_tf_listener;  //!< Use to retrieve TF data
+        std::vector<ros::Subscriber>
+                m_subs_depthcam;  //!< Subscriber to depth camera data
+        tf::TransformListener m_tf_listener;  //!< Use to retrieve TF data
 	/**  @} */
 
 	/**
@@ -165,125 +151,100 @@ class LocalObstaclesNode
 			subs[i] = m_nh.subscribe(lstSources[i], 1, cb, this);
 		return lstSources.size();
 	}
-	/** Callback: On new sensor data (depth camera)
-	 */
-	void onNewSensor_DepthCam(const sensor_msgs::PointCloud2Ptr& scan)
-	{
-		CTimeLoggerEntry tle(m_profiler, "onNewSensor_DepthCam");
-		// Get the relative position of the sensor wrt the robot:
-		tf::StampedTransform sensorOnRobot;
-		try
-		{
-			CTimeLoggerEntry tle2(
-				m_profiler, "onNewSensor_DepthCam.lookupTransform_sensor");
-			// ROS_INFO("[onNewSensor_DepthCam] %s, %s
-			// ",scan->header.frame_id.c_str(), m_frameid_robot.c_str());
 
-			m_tf_listener.lookupTransform(
-				m_frameid_robot, scan->header.frame_id, ros::Time(0),
-				sensorOnRobot);
-		}
-		catch (tf::TransformException& ex)
-		{
-			ROS_ERROR("%s", ex.what());
-			return;
-		}
+        /** Callback: On new sensor data (depth camera)
+          */
+        void onNewSensor_DepthCam(const sensor_msgs::PointCloud2Ptr& scan)
+        {
+                CTimeLoggerEntry tle(m_profiler, "onNewSensor_DepthCam");
+				ROS_INFO("\n\n\n\n\n\n\n HOLAAAAAA \n\n\n\n");
+                // Get the relative position of the sensor wrt the robot:
+                tf::StampedTransform sensorOnRobot;
+                try
+                {
+                        CTimeLoggerEntry tle2(
+                                m_profiler, "onNewSensor_DepthCam.lookupTransform_sensor");
+                        m_tf_listener.lookupTransform(
+                                m_frameid_robot, scan->header.frame_id, ros::Time(0),
+                                sensorOnRobot);
+                }
+                catch (tf::TransformException& ex)
+                {
+                        ROS_ERROR("%s", ex.what());
+                        return;
+                }
 
-		// Convert data to MRPT format:
-		// mrpt::poses::CPose3D sensorOnRobot_mrpt;
-		// mrpt_bridge::convert(sensorOnRobot, sensorOnRobot_mrpt);
-		// In MRPT, CSimplePointsMap holds sensor data:
-		CSimplePointsMap::Ptr obsPointMap =
-#if MRPT_VERSION >= 0x199
-			mrpt::make_aligned_shared<CSimplePointsMap>();
-#else
-			CSimplePointsMap::Create();
-#endif
-		// Convert to PCL data type
-		/*pcl::PointCloud
-		pcl_conversions::toPCL(*scan, *cloud);
-		// Perform voxel grid downsampling filtering
-		pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
-		sor.setInputCloud(cloudPtr);
-		sor.setLeafSize(0.01, 0.01, 0.01);
-		sor.filter(*cloudFilteredPtr);*/
-		sensor_msgs::PointCloud2Ptr scan_voxel(new sensor_msgs::PointCloud2);
-		{
-			pcl::PCLPointCloud2 *cloud = new pcl::PCLPointCloud2;
-			pcl::PCLPointCloud2 *cloud_filt = new pcl::PCLPointCloud2;
-			pcl::PCLPointCloud2Ptr cloud_ptr(cloud);
-			pcl::PCLPointCloud2Ptr cloud_filt_ptr(cloud_filt);
-			pcl_conversions::toPCL(*scan, *cloud);
-			pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
-			sor.setInputCloud(cloud_ptr);
-			sor.setLeafSize(0.3, 0.3, 0.3);
-			sor.filter(*cloud_filt_ptr);
-			pcl_conversions::fromPCL(*cloud_filt_ptr, *scan_voxel);
-		}
-		mrpt_bridge::copy(*scan_voxel, *obsPointMap);
+                // Convert data to MRPT format:
+                // mrpt::poses::CPose3D sensorOnRobot_mrpt;
+                // mrpt_bridge::convert(sensorOnRobot, sensorOnRobot_mrpt);
+                // In MRPT, CSimplePointsMap holds sensor data:
+                CSimplePointsMap::Ptr obsPointMap =
+                        mrpt::make_aligned_shared<CSimplePointsMap>();
+                mrpt_bridge::copy(*scan, *obsPointMap);
 
-		ROS_DEBUG(
-			"[onNewSensor_DepthCam] %u points",
-			static_cast<unsigned int>(obsPointMap->size()));
+                ROS_DEBUG(
+                        "[onNewSensor_DepthCam] %u points",
+                        static_cast<unsigned int>(obsPointMap->size()));
 
-		// Get sensor timestamp:
-		const double timestamp = scan->header.stamp.toSec();
+                // Get sensor timestamp:
+                const double timestamp = scan->header.stamp.toSec();
 
-		// Get camera pose at that time in the reference frame
-		mrpt::poses::CPose3D robotPose;
-		try
-		{
-			CTimeLoggerEntry tle3(
-				m_profiler, "onNewSensor_DepthCam.lookupTransform_robot");
-			tf::StampedTransform tx;
+                // Get robot pose at that time in the reference frame, typ: /odom ->
+                // /base_link
+                mrpt::poses::CPose3D robotPose;
+                try
+                {
+                        CTimeLoggerEntry tle3(
+                                m_profiler, "onNewSensor_DepthCam.lookupTransform_robot");
+                        tf::StampedTransform tx;
 
-			try
-			{
-				m_tf_listener.lookupTransform(
-					m_frameid_reference, m_frameid_robot, scan->header.stamp,
-					tx);
-			}
-			catch (tf::ExtrapolationException&)
-			{
-				// if we need a "too much " recent robot pose,be happy with the
-				// latest one:
-				m_tf_listener.lookupTransform(
-					m_frameid_reference, m_frameid_robot, ros::Time(0), tx);
-			}
-			mrpt_bridge::convert(tx * sensorOnRobot, robotPose);
-			ROS_DEBUG(
-				"[onNewSensor_DepthCam] robot pose %s",
-				robotPose.asString().c_str());
-		}
-		catch (tf::TransformException& ex)
-		{
-			ROS_ERROR("%s", ex.what());
-			return;
-		}
+                        try
+                        {
+                                m_tf_listener.lookupTransform(
+                                        m_frameid_reference, m_frameid_robot, scan->header.stamp,
+                                        tx);
+                        }
+                        catch (tf::ExtrapolationException&)
+                        {
+                                // if we need a "too much " recent robot pose,be happy with the
+                                // latest one:
+                                m_tf_listener.lookupTransform(
+                                        m_frameid_reference, m_frameid_robot, ros::Time(0), tx);
+                        }
+                        mrpt_bridge::convert(tx, robotPose);
+                        ROS_DEBUG(
+                                "[onNewSensor_DepthCam] robot pose %s",
+                                robotPose.asString().c_str());
+                }
+                catch (tf::TransformException& ex)
+                {
+                        ROS_ERROR("%s", ex.what());
+                        return;
+                }
 
-		// Insert into the observation history:
-		TInfoPerTimeStep ipt;
-		ipt.point_map = obsPointMap;
-		ipt.robot_pose = robotPose;
+                // Insert into the observation history:
+                TInfoPerTimeStep ipt;
+                ipt.point_map = obsPointMap;
+                ipt.robot_pose = robotPose;
 
-		m_hist_obs_mtx.lock();
-		m_hist_obs.insert(
-			m_hist_obs.end(), TListObservations::value_type(timestamp, ipt));
-		m_hist_obs_mtx.unlock();
+                m_hist_obs_mtx.lock();
+                m_hist_obs.insert(
+                        m_hist_obs.end(), TListObservations::value_type(timestamp, ipt));
+                m_hist_obs_mtx.unlock();
 
-	}  // end onNewSensor_DepthCam
+        }  // end onNewSensor_DepthCam
 
-	/** Callback: On new sensor data
-	 */
+        /** Callback: On new sensor data (laser2D)
+	  */
 	void onNewSensor_Laser2D(const sensor_msgs::LaserScanConstPtr& scan)
 	{
-		CTimeLoggerEntry tle(m_profiler, "onNewSensor_Laser2D");
+		::CTimeLoggerEntry tle(m_profiler, "onNewSensor_Laser2D");
 
 		// Get the relative position of the sensor wrt the robot:
 		tf::StampedTransform sensorOnRobot;
 		try
 		{
-			CTimeLoggerEntry tle2(
+			::CTimeLoggerEntry tle2(
 				m_profiler, "onNewSensor_Laser2D.lookupTransform_sensor");
 			m_tf_listener.lookupTransform(
 				m_frameid_robot, scan->header.frame_id, ros::Time(0),
@@ -300,7 +261,8 @@ class LocalObstaclesNode
 		mrpt_bridge::convert(sensorOnRobot, sensorOnRobot_mrpt);
 		// In MRPT, CObservation2DRangeScan holds both: sensor data + relative
 		// pose:
-		auto obsScan = CObservation2DRangeScan::Create();
+		CObservation2DRangeScan::Ptr obsScan =
+			mrpt::make_aligned_shared<CObservation2DRangeScan>();
 		mrpt_bridge::convert(*scan, sensorOnRobot_mrpt, *obsScan);
 
 		ROS_DEBUG(
@@ -316,7 +278,7 @@ class LocalObstaclesNode
 		mrpt::poses::CPose3D robotPose;
 		try
 		{
-			CTimeLoggerEntry tle3(
+			::CTimeLoggerEntry tle3(
 				m_profiler, "onNewSensor_Laser2D.lookupTransform_robot");
 			tf::StampedTransform tx;
 
@@ -359,12 +321,13 @@ class LocalObstaclesNode
 	/** Callback: On recalc local map & publish it */
 	void onDoPublish(const ros::TimerEvent&)
 	{
-		CTimeLoggerEntry tle(m_profiler, "onDoPublish");
+		::CTimeLoggerEntry tle(m_profiler, "onDoPublish");
 
 		// Purge old observations & latch a local copy:
 		TListObservations obs;
 		{
-			CTimeLoggerEntry tle(m_profiler, "onDoPublish.removingOld");
+			::CTimeLoggerEntry tle(
+				m_profiler, "onDoPublish.removingOld");
 			m_hist_obs_mtx.lock();
 
 			// Purge old obs:
@@ -395,7 +358,8 @@ class LocalObstaclesNode
 		m_localmap_pts.clear();
 		mrpt::poses::CPose3D curRobotPose;
 		{
-			CTimeLoggerEntry tle2(m_profiler, "onDoPublish.buildLocalMap");
+			::CTimeLoggerEntry tle2(
+				m_profiler, "onDoPublish.buildLocalMap");
 
 			// Get the latest robot pose in the reference frame (typ: /odom ->
 			// /base_link)
@@ -406,13 +370,14 @@ class LocalObstaclesNode
 				m_tf_listener.lookupTransform(
 					m_frameid_reference, m_frameid_robot, ros::Time(0), tx);
 				mrpt_bridge::convert(tx, curRobotPose);
-				ROS_DEBUG(
+				ROS_INFO(
 					"[onDoPublish] Building local map relative to latest robot "
 					"pose: %s",
 					curRobotPose.asString().c_str());
 			}
 			catch (tf::TransformException& ex)
 			{
+				ROS_INFO("We are in the darkest timeline");
 				ROS_ERROR("%s", ex.what());
 				return;
 			}
@@ -427,27 +392,20 @@ class LocalObstaclesNode
 				// Relative pose in the past:
 				mrpt::poses::CPose3D relPose(mrpt::poses::UNINITIALIZED_POSE);
 				relPose.inverseComposeFrom(ipt.robot_pose, curRobotPose);
-				ROS_DEBUG(
-					"[onDoPublish] Building local map relative to latest robot "
-					"pose: %s",
-					relPose.asString().c_str());
-				// Insert obs:
-				if (ipt.observation)
-				{
-					m_localmap_pts.insertObservationPtr(
-						ipt.observation, &relPose);
-				}
-				else if (ipt.point_map)
-				{
-					m_localmap_pts.insertAnotherMap(
-						ipt.point_map.get(), relPose);
-				}
-				else
-				{
-					ROS_DEBUG(
-						"[onDoPublish] Observation is empty, could not be "
-						"added to local map");
-				}
+
+				// Insert obs: TODO
+                                if (ipt.observation)
+                                {
+                                    m_localmap_pts.insertObservationPtr(ipt.observation, &relPose);
+                                }
+                                else if (ipt.point_map)
+                                {
+                                    m_localmap_pts.insertAnotherMap(ipt.point_map.get(), relPose);
+                                }
+                                else
+                                {
+                                    ROS_DEBUG("[onDoPublish] Observation is empty, could not be added to local map");
+                                }
 
 			}  // end for
 		}
@@ -473,35 +431,42 @@ class LocalObstaclesNode
 					"LocalObstaclesNode", 800, 600);
 				mrpt::opengl::COpenGLScene::Ptr& scene =
 					m_gui_win->get3DSceneAndLock();
-				scene->insert(mrpt::opengl::CGridPlaneXY::Create());
+				scene->insert(
+					mrpt::make_aligned_shared<mrpt::opengl::CGridPlaneXY>());
 				scene->insert(
 					mrpt::opengl::stock_objects::CornerXYZSimple(1.0, 4.0));
 
-				auto gl_obs = mrpt::opengl::CSetOfObjects::Create();
+				mrpt::opengl::CSetOfObjects::Ptr gl_obs =
+					mrpt::make_aligned_shared<mrpt::opengl::CSetOfObjects>();
 				gl_obs->setName("obstacles");
 				scene->insert(gl_obs);
 
-				auto gl_pts = mrpt::opengl::CPointCloud::Create();
+				mrpt::opengl::CPointCloud::Ptr gl_pts =
+					mrpt::make_aligned_shared<mrpt::opengl::CPointCloud>();
 				gl_pts->setName("points");
 				gl_pts->setPointSize(2.0);
-				gl_pts->setColor_u8(TColor(0x0000ff));
+				gl_pts->setColor_u8(::TColor(0x0000ff));
 				scene->insert(gl_pts);
 
 				m_gui_win->unlockAccess3DScene();
 			}
 
-			auto& scene = m_gui_win->get3DSceneAndLock();
-			auto gl_obs = mrpt::ptr_cast<mrpt::opengl::CSetOfObjects>::from(
-				scene->getByName("obstacles"));
+			mrpt::opengl::COpenGLScene::Ptr& scene =
+				m_gui_win->get3DSceneAndLock();
+			mrpt::opengl::CSetOfObjects::Ptr gl_obs =
+				std::dynamic_pointer_cast<mrpt::opengl::CSetOfObjects>(
+					scene->getByName("obstacles"));
 			ROS_ASSERT(!!gl_obs);
 			gl_obs->clear();
 
-			auto gl_pts = mrpt::ptr_cast<mrpt::opengl::CPointCloud>::from(
-				scene->getByName("points"));
+			mrpt::opengl::CPointCloud::Ptr gl_pts =
+				std::dynamic_pointer_cast<mrpt::opengl::CPointCloud>(
+					scene->getByName("points"));
 
-			for (const auto& o : obs)
+			for (TListObservations::const_iterator it = obs.begin();
+				 it != obs.end(); ++it)
 			{
-				const TInfoPerTimeStep& ipt = o.second;
+				const TInfoPerTimeStep& ipt = it->second;
 				// Relative pose in the past:
 				mrpt::poses::CPose3D relPose(mrpt::poses::UNINITIALIZED_POSE);
 				relPose.inverseComposeFrom(ipt.robot_pose, curRobotPose);
@@ -531,7 +496,7 @@ class LocalObstaclesNode
 		  m_frameid_robot("base_link"),
 		  m_topic_local_map_pointcloud("local_map_pointcloud"),
 		  m_source_topics_2dscan("scan,laser1"),
-		  m_source_topics_depthcam("depthcam"),
+                  m_source_topics_depthcam("depthcam"),
 		  m_time_window(0.2),
 		  m_publish_period(0.05)
 	{
@@ -546,10 +511,10 @@ class LocalObstaclesNode
 		m_localn.param(
 			"source_topics_2dscan", m_source_topics_2dscan,
 			m_source_topics_2dscan);
-		m_localn.param("time_window", m_time_window, m_time_window);
-		m_localn.param(
-			"source_topics_depthcam", m_source_topics_depthcam,
-			m_source_topics_depthcam);
+                m_localn.param(
+                        "source_topics_depthcam", m_source_topics_depthcam,
+                        m_source_topics_depthcam);
+                m_localn.param("time_window", m_time_window, m_time_window);
 		m_localn.param("publish_period", m_publish_period, m_publish_period);
 
 		ROS_ASSERT(m_time_window > m_publish_period);
@@ -565,10 +530,10 @@ class LocalObstaclesNode
 		nSubsTotal += this->subscribeToMultipleTopics(
 			m_source_topics_2dscan, m_subs_2dlaser,
 			&LocalObstaclesNode::onNewSensor_Laser2D);
-		nSubsTotal += this->subscribeToMultipleTopics(
-			m_source_topics_depthcam, m_subs_depthcam,
-			&LocalObstaclesNode::onNewSensor_DepthCam);
-		ROS_INFO(
+                nSubsTotal += this->subscribeToMultipleTopics(
+                        m_source_topics_depthcam, m_subs_depthcam,
+                        &LocalObstaclesNode::onNewSensor_DepthCam);
+                ROS_INFO(
 			"Total number of sensor subscriptions: %u\n",
 			static_cast<unsigned int>(nSubsTotal));
 		ROS_ASSERT_MSG(
