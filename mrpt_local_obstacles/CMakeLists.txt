@@ -64,7 +64,17 @@ include_directories(
 
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
+
+add_library(mrpt_local_obstacles_nodelet src/mrpt_local_obstacles_nodelet.cpp)
+add_dependencies(mrpt_local_obstacles_nodelet ${catkin_EXPORTED_TARGETS} ${MPRT_EXPORTED_TARGETS})
+target_link_libraries(mrpt_local_obstacles_nodelet 
+${INCLUDE} ${MRPT_LIBRARIES} ${catkin_LIBRARIES} 
+${PCL_LIBRARIES})
+
+
 ## Declare a cpp executable
+
+
 add_executable(${PROJECT_NAME}_node
   src/mrpt_local_obstacles_node.cpp
 )

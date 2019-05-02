@@ -1,37 +1,6 @@
-/***********************************************************************************
- * Revised BSD License *
- * Copyright (c) 2014-2015, Jose-Luis Blanco <jlblanco@ual.es> *
- * All rights reserved. *
- *                                                                                 *
- * Redistribution and use in source and binary forms, with or without *
- * modification, are permitted provided that the following conditions are met: *
- *     * Redistributions of source code must retain the above copyright *
- *       notice, this list of conditions and the following disclaimer. *
- *     * Redistributions in binary form must reproduce the above copyright *
- *       notice, this list of conditions and the following disclaimer in the *
- *       documentation and/or other materials provided with the distribution. *
- *     * Neither the name of the Vienna University of Technology nor the *
- *       names of its contributors may be used to endorse or promote products *
- *       derived from this software without specific prior written permission. *
- *                                                                                 *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- *AND *
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- **
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE *
- * DISCLAIMED. IN NO EVENT SHALL Markus Bader BE LIABLE FOR ANY *
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES *
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- **
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND *
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT *
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- **
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. *
- ***********************************************************************************/
-
 #include <ros/ros.h>
-
+#include <nodelet/nodelet.h>
+#include <pluginlib/class_list_macros.h>
 #include <sensor_msgs/LaserScan.h>
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/PointCloud2.h>
@@ -83,23 +52,17 @@ using namespace mrpt::utils;
 #include <pcl/common/centroid.h>
 #include <pcl_conversions/pcl_conversions.h>
 
-// The ROS node
-class LocalObstaclesNode
-{
-   private:
-	struct TAuxInitializer
-	{
-		TAuxInitializer(int argc, char** argv)
-		{
-			ros::init(argc, argv, "mrpt_local_obstacles_node");
-		}
-	};
+
+namespace local {
+class MrptLocalObstaclesNodelet : public nodelet::Nodelet {
+
+private:
+
+	ros::NodeHandle m_nh;  //!< The node handle
+	ros::NodeHandle m_localn;  //!< "~"
 
 	CTimeLogger m_profiler;
 
-	TAuxInitializer m_auxinit;  //!< Just to make sure ROS is init first
-	ros::NodeHandle m_nh;  //!< The node handle
-	ros::NodeHandle m_localn;  //!< "~"
 	bool m_show_gui;
 	std::string m_frameid_reference;  //!< typ: "odom"
 	std::string m_frameid_robot;  //!< typ: "base_link"
@@ -162,7 +125,7 @@ class LocalObstaclesNode
 	}
 	/** Callback: On new sensor data (depth camera)
 	 */
-	void onNewSensor_DepthCam(const sensor_msgs::PointCloud2Ptr& scan)
+	void onNewSensor_DepthCam(const sensor_msgs::PointCloud2ConstPtr& scan)
 	{
 		CTimeLoggerEntry tle(m_profiler, "onNewSensor_DepthCam");
 		// Get the relative position of the sensor wrt the robot:
@@ -171,7 +134,7 @@ class LocalObstaclesNode
 		{
 			CTimeLoggerEntry tle2(
 				m_profiler, "onNewSensor_DepthCam.lookupTransform_sensor");
-			// ROS_INFO("[onNewSensor_DepthCam] %s, %s
+			// NODELET_INFO("[onNewSensor_DepthCam] %s, %s
 			// ",scan->header.frame_id.c_str(), m_frameid_robot.c_str());
 
 			m_tf_listener.lookupTransform(
@@ -180,7 +143,7 @@ class LocalObstaclesNode
 		}
 		catch (tf::TransformException& ex)
 		{
-			ROS_ERROR("%s", ex.what());
+			NODELET_ERROR("%s", ex.what());
 			return;
 		}
 
@@ -252,7 +215,7 @@ class LocalObstaclesNode
 		}
 		catch (tf::TransformException& ex)
 		{
-			ROS_ERROR("%s", ex.what());
+			NODELET_ERROR("%s", ex.what());
 			return;
 		}
 
@@ -286,7 +249,7 @@ class LocalObstaclesNode
 		}
 		catch (tf::TransformException& ex)
 		{
-			ROS_ERROR("%s", ex.what());
+			NODELET_ERROR("%s", ex.what());
 			return;
 		}
 
@@ -335,7 +298,7 @@ class LocalObstaclesNode
 		}
 		catch (tf::TransformException& ex)
 		{
-			ROS_ERROR("%s", ex.what());
+			NODELET_ERROR("%s", ex.what());
 			return;
 		}
 
@@ -408,7 +371,7 @@ class LocalObstaclesNode
 			}
 			catch (tf::TransformException& ex)
 			{
-				ROS_ERROR("%s", ex.what());
+				NODELET_ERROR("%s", ex.what());
 				return;
 			}
 
@@ -515,22 +478,20 @@ class LocalObstaclesNode
 
 	}  // onDoPublish
 
-   public:
-	/**  Constructor: Inits ROS system */
-	LocalObstaclesNode(int argc, char** argv)
-		: m_auxinit(argc, argv),
-		  m_nh(),
-		  m_localn("~"),
-		  m_show_gui(true),
-		  m_frameid_reference("odom"),
-		  m_frameid_robot("base_link"),
-		  m_topic_local_map_pointcloud("local_map_pointcloud"),
-		  m_source_topics_2dscan("scan,laser1"),
-		  m_source_topics_depthcam("depthcam"),
-		  m_time_window(0.2),
-		  m_publish_period(0.05)
-	{
-		// Load params:
+public:
+  virtual void onInit(){
+    m_nh = getNodeHandle();
+    m_localn = getPrivateNodeHandle();
+    m_show_gui = true;
+    m_frameid_reference = "odom";
+    m_frameid_robot = "base_link";
+    m_topic_local_map_pointcloud = "local_map_pointcloud";
+    m_source_topics_2dscan = "scan,laser1";
+    m_source_topics_depthcam = "depthcam";
+    m_time_window = 0.2;
+    m_publish_period = 0.05;
+
+    // Load params:
 		m_localn.param("show_gui", m_show_gui, m_show_gui);
 		m_localn.param(
 			"frameid_reference", m_frameid_reference, m_frameid_reference);
@@ -559,11 +520,11 @@ class LocalObstaclesNode
 		size_t nSubsTotal = 0;
 		nSubsTotal += this->subscribeToMultipleTopics(
 			m_source_topics_2dscan, m_subs_2dlaser,
-			&LocalObstaclesNode::onNewSensor_Laser2D);
+			&MrptLocalObstaclesNodelet::onNewSensor_Laser2D);
 		nSubsTotal += this->subscribeToMultipleTopics(
 			m_source_topics_depthcam, m_subs_depthcam,
-			&LocalObstaclesNode::onNewSensor_DepthCam);
-		ROS_INFO(
+			&MrptLocalObstaclesNodelet::onNewSensor_DepthCam);
+		NODELET_INFO(
 			"Total number of sensor subscriptions: %u\n",
 			static_cast<unsigned int>(nSubsTotal));
 		ROS_ASSERT_MSG(
@@ -577,16 +538,12 @@ class LocalObstaclesNode
 
 		// Init timers:
 		m_timer_publish = m_nh.createTimer(
-			ros::Duration(m_publish_period), &LocalObstaclesNode::onDoPublish,
+			ros::Duration(m_publish_period), &MrptLocalObstaclesNodelet::onDoPublish,
 			this);
+  }
 
-	}  // end ctor
+};
 
-};  // end class
-
-int main(int argc, char** argv)
-{
-	LocalObstaclesNode the_node(argc, argv);
-	ros::spin();
-	return 0;
 }
+
+PLUGINLIB_EXPORT_CLASS(local::MrptLocalObstaclesNodelet, nodelet::Nodelet);

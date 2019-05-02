@@ -1,0 +1,8 @@
+<library path="lib/libmrpt_local_obstacles_nodelet">
+    <class name="mrpt_local_obstacles/mrpt_local_obstacles_nodelet"
+    type="local::MrptLocalObstaclesNodelet" base_class_type="nodelet::Nodelet">
+    <description>
+      Local obstacles node port to nodelet.
+    </description>
+  </class>
+</library>

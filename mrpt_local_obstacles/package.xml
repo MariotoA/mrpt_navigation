@@ -23,7 +23,10 @@
   <depend>sensor_msgs</depend>
   <depend>tf</depend>
   <depend>visualization_msgs</depend>
-
+  <depend>nodelet</depend>
   <export>
+    <!-- Other tools can request additional information be placed here -->
+  <nodelet plugin="${prefix}/nodelet_plugin.xml" />
   </export>
+
 </package>
