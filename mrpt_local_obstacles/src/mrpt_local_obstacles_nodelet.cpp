@@ -51,7 +51,7 @@ using namespace mrpt::utils;
 #include <pcl/common/common.h>
 #include <pcl/common/centroid.h>
 #include <pcl_conversions/pcl_conversions.h>
-
+#include <pcl_ros/point_cloud.h>
 
 namespace local {
 class MrptLocalObstaclesNodelet : public nodelet::Nodelet {
@@ -123,6 +123,21 @@ private:
 			subs[i] = m_nh.subscribe(lstSources[i], 1, cb, this);
 		return lstSources.size();
 	}
+	void downscaleCloud(const sensor_msgs::PointCloudPtr scan,
+	 const sensor_msgs::PointCloudPtr scan_voxel) 
+	{
+		pcl::PointCloud<pcl::PointXYZ>* cloud = new pcl::PointCloud<pcl::PointXYZ>;
+		pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ptr(cloud);
+		pcl::PointCloud<pcl::PointXYZ>* cloud_filt = new pcl::PointCloud<pcl::PointXYZ>;
+		pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ptr_filt(cloud_filt);
+		/*pcl_conversions::toPCL(*scan, *cloud);
+		pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
+		sor.setInputCloud(cloud_ptr);
+		sor.setLeafSize(0.3, 0.3, 0.3);
+		sor.filter(*cloud_filt_ptr);
+		pcl_conversions::fromPCL(*cloud_filt_ptr, *scan_voxel);*/
+		
+	}
 	/** Callback: On new sensor data (depth camera)
 	 */
 	void onNewSensor_DepthCam(const sensor_msgs::PointCloud2ConstPtr& scan)
@@ -166,17 +181,21 @@ private:
 		sor.setLeafSize(0.01, 0.01, 0.01);
 		sor.filter(*cloudFilteredPtr);*/
 		sensor_msgs::PointCloud2Ptr scan_voxel(new sensor_msgs::PointCloud2);
+		
 		{
-			pcl::PCLPointCloud2* cloud = new pcl::PCLPointCloud2;
-			pcl::PCLPointCloud2* cloud_filt = new pcl::PCLPointCloud2;
-			pcl::PCLPointCloud2Ptr cloud_ptr(cloud);
-			pcl::PCLPointCloud2Ptr cloud_filt_ptr(cloud_filt);
-			pcl_conversions::toPCL(*scan, *cloud);
-			pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
-			sor.setInputCloud(cloud_ptr);
-			sor.setLeafSize(0.3, 0.3, 0.3);
-			sor.filter(*cloud_filt_ptr);
-			pcl_conversions::fromPCL(*cloud_filt_ptr, *scan_voxel);
+			
+		pcl::PCLPointCloud2* cloud = new pcl::PCLPointCloud2;
+		pcl::PCLPointCloud2ConstPtr cloud_ptr(cloud);
+		pcl::PCLPointCloud2* cloud_filt = new pcl::PCLPointCloud2;
+		pcl::PCLPointCloud2ConstPtr cloud_ptr_filt(cloud_filt);
+		pcl_conversions::toPCL(*scan, *cloud);
+		pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
+		sor.setInputCloud(cloud_ptr);
+		sor.setLeafSize(0.3, 0.3, 0.3);
+		sor.filter(*cloud_filt);
+		pcl_conversions::fromPCL(*cloud_ptr_filt, *scan_voxel);
+		
+	
 		}
 		mrpt_bridge::copy(*scan_voxel, *obsPointMap);
 
@@ -413,12 +432,13 @@ private:
 		// Publish them:
 		if (m_pub_local_map_pointcloud.getNumSubscribers() > 0)
 		{
-			sensor_msgs::PointCloudPtr msg_pts =
-				sensor_msgs::PointCloudPtr(new sensor_msgs::PointCloud);
+			sensor_msgs::PointCloud2Ptr msg_pts =
+				sensor_msgs::PointCloud2Ptr(new sensor_msgs::PointCloud2);
 			msg_pts->header.frame_id = m_frameid_robot;
 			msg_pts->header.stamp = ros::Time(obs.rbegin()->first);
-			mrpt_bridge::point_cloud::mrpt2ros(
-				m_localmap_pts, msg_pts->header, *msg_pts);
+			mrpt_bridge::copy(m_localmap_pts,msg_pts->header, *msg_pts);
+		//	mrpt_bridge::point_cloud::mrpt2ros(
+		//		m_localmap_pts, msg_pts->header, *msg_pts);
 			m_pub_local_map_pointcloud.publish(msg_pts);
 		}
 
@@ -512,7 +532,7 @@ public:
 		ROS_ASSERT(m_publish_period > 0);
 
 		// Init ROS publishers:
-		m_pub_local_map_pointcloud = m_nh.advertise<sensor_msgs::PointCloud>(
+		m_pub_local_map_pointcloud = m_nh.advertise<sensor_msgs::PointCloud2>(
 			m_topic_local_map_pointcloud, 10);
 
 		// Init ROS subs:
