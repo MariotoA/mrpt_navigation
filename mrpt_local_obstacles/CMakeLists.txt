@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   visualization_msgs
   pcl_ros
+  laser_geometry
 )
 
 ## System dependencies are found with CMake's conventions

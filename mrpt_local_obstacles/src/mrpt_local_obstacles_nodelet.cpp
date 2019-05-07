@@ -5,7 +5,6 @@
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <nav_msgs/Odometry.h>
-
 #include <tf/transform_listener.h>
 
 #include <mrpt_bridge/pose.h>
@@ -53,6 +52,7 @@ using namespace mrpt::utils;
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl_ros/point_cloud.h>
 
+#include <laser_geometry/laser_geometry.h>
 namespace local {
 class MrptLocalObstaclesNodelet : public nodelet::Nodelet {
 
@@ -123,21 +123,33 @@ private:
 			subs[i] = m_nh.subscribe(lstSources[i], 1, cb, this);
 		return lstSources.size();
 	}
-	void downscaleCloud(const sensor_msgs::PointCloudPtr scan,
-	 const sensor_msgs::PointCloudPtr scan_voxel) 
+	void downscaleCloud(const sensor_msgs::PointCloud2ConstPtr scan,
+	 const sensor_msgs::PointCloud2Ptr scan_voxel) const
 	{
-		pcl::PointCloud<pcl::PointXYZ>* cloud = new pcl::PointCloud<pcl::PointXYZ>;
-		pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ptr(cloud);
-		pcl::PointCloud<pcl::PointXYZ>* cloud_filt = new pcl::PointCloud<pcl::PointXYZ>;
-		pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ptr_filt(cloud_filt);
-		/*pcl_conversions::toPCL(*scan, *cloud);
+		pcl::PCLPointCloud2* cloud = new pcl::PCLPointCloud2;
+		pcl::PCLPointCloud2ConstPtr cloud_ptr(cloud);
+		pcl::PCLPointCloud2* cloud_filt = new pcl::PCLPointCloud2;
+		pcl::PCLPointCloud2ConstPtr cloud_ptr_filt(cloud_filt);
+		pcl_conversions::toPCL(*scan, *cloud);
 		pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
 		sor.setInputCloud(cloud_ptr);
 		sor.setLeafSize(0.3, 0.3, 0.3);
-		sor.filter(*cloud_filt_ptr);
-		pcl_conversions::fromPCL(*cloud_filt_ptr, *scan_voxel);*/
-		
+		sor.filter(*cloud_filt);
+		pcl_conversions::fromPCL(*cloud_ptr_filt, *scan_voxel);
+
 	}
+
+	void downscaleLaser(const sensor_msgs::LaserScanConstPtr scan,
+	 const sensor_msgs::PointCloud2Ptr scan_voxel) const
+	{	
+		laser_geometry::LaserProjection proj;
+		sensor_msgs::PointCloud2Ptr cloud(new sensor_msgs::PointCloud2);
+		proj.projectLaser(*scan,*cloud);
+		NODELET_INFO("Header laser cloud: %s", cloud->header.frame_id.c_str());
+		downscaleCloud(cloud, scan_voxel);
+	}
+
+
 	/** Callback: On new sensor data (depth camera)
 	 */
 	void onNewSensor_DepthCam(const sensor_msgs::PointCloud2ConstPtr& scan)
@@ -172,31 +184,8 @@ private:
 #else
 			CSimplePointsMap::Create();
 #endif
-		// Convert to PCL data type
-		/*pcl::PointCloud
-		pcl_conversions::toPCL(*scan, *cloud);
-		// Perform voxel grid downsampling filtering
-		pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
-		sor.setInputCloud(cloudPtr);
-		sor.setLeafSize(0.01, 0.01, 0.01);
-		sor.filter(*cloudFilteredPtr);*/
 		sensor_msgs::PointCloud2Ptr scan_voxel(new sensor_msgs::PointCloud2);
-		
-		{
-			
-		pcl::PCLPointCloud2* cloud = new pcl::PCLPointCloud2;
-		pcl::PCLPointCloud2ConstPtr cloud_ptr(cloud);
-		pcl::PCLPointCloud2* cloud_filt = new pcl::PCLPointCloud2;
-		pcl::PCLPointCloud2ConstPtr cloud_ptr_filt(cloud_filt);
-		pcl_conversions::toPCL(*scan, *cloud);
-		pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
-		sor.setInputCloud(cloud_ptr);
-		sor.setLeafSize(0.3, 0.3, 0.3);
-		sor.filter(*cloud_filt);
-		pcl_conversions::fromPCL(*cloud_ptr_filt, *scan_voxel);
-		
-	
-		}
+		downscaleCloud(scan, scan_voxel);
 		mrpt_bridge::copy(*scan_voxel, *obsPointMap);
 
 		ROS_DEBUG(
@@ -277,13 +266,26 @@ private:
 		mrpt_bridge::convert(sensorOnRobot, sensorOnRobot_mrpt);
 		// In MRPT, CObservation2DRangeScan holds both: sensor data + relative
 		// pose:
-		auto obsScan = CObservation2DRangeScan::Create();
-		mrpt_bridge::convert(*scan, sensorOnRobot_mrpt, *obsScan);
 
-		ROS_DEBUG(
+		CSimplePointsMap::Ptr obsPointMap =
+#if MRPT_VERSION >= 0x199
+			mrpt::make_aligned_shared<CSimplePointsMap>();
+#else
+			CSimplePointsMap::Create();
+#endif
+		sensor_msgs::PointCloud2Ptr scan_voxel(new sensor_msgs::PointCloud2);
+		
+		downscaleLaser(scan, scan_voxel);
+		mrpt_bridge::copy(*scan_voxel, *obsPointMap);
+
+	//	auto obsScan = CObservation2DRangeScan::Create();
+	//	sensor_msgs::LaserScan scan_trimmed;
+	//	mrpt_bridge::convert(scan_trimmed, sensorOnRobot_mrpt, *obsScan);
+
+		/*ROS_DEBUG(
 			"[onNewSensor_Laser2D] %u rays, sensor pose on robot %s",
 			static_cast<unsigned int>(obsScan->scan.size()),
-			sensorOnRobot_mrpt.asString().c_str());
+			sensorOnRobot_mrpt.asString().c_str());*/
 
 		// Get sensor timestamp:
 		const double timestamp = scan->header.stamp.toSec();
@@ -310,7 +312,7 @@ private:
 				m_tf_listener.lookupTransform(
 					m_frameid_reference, m_frameid_robot, ros::Time(0), tx);
 			}
-			mrpt_bridge::convert(tx, robotPose);
+			mrpt_bridge::convert(tx*sensorOnRobot, robotPose);
 			ROS_DEBUG(
 				"[onNewSensor_Laser2D] robot pose %s",
 				robotPose.asString().c_str());
@@ -323,7 +325,7 @@ private:
 
 		// Insert into the observation history:
 		TInfoPerTimeStep ipt;
-		ipt.observation = obsScan;
+		ipt.point_map = obsPointMap;
 		ipt.robot_pose = robotPose;
 
 		m_hist_obs_mtx.lock();
@@ -434,11 +436,17 @@ private:
 		{
 			sensor_msgs::PointCloud2Ptr msg_pts =
 				sensor_msgs::PointCloud2Ptr(new sensor_msgs::PointCloud2);
+			sensor_msgs::PointCloud2Ptr msg_pts2 =
+				sensor_msgs::PointCloud2Ptr(new sensor_msgs::PointCloud2);
 			msg_pts->header.frame_id = m_frameid_robot;
 			msg_pts->header.stamp = ros::Time(obs.rbegin()->first);
 			mrpt_bridge::copy(m_localmap_pts,msg_pts->header, *msg_pts);
 		//	mrpt_bridge::point_cloud::mrpt2ros(
 		//		m_localmap_pts, msg_pts->header, *msg_pts);
+
+
+		
+
 			m_pub_local_map_pointcloud.publish(msg_pts);
 		}
 
