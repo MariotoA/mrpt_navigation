@@ -73,6 +73,11 @@ target_link_libraries(mrpt_local_obstacles_nodelet
 ${INCLUDE} ${MRPT_LIBRARIES} ${catkin_LIBRARIES} 
 ${PCL_LIBRARIES})
 
+add_library(mrpt_local_obstacles_nodelet_pcl src/mrpt_local_obstacles_nodelet_pcl.cpp)
+add_dependencies(mrpt_local_obstacles_nodelet_pcl ${catkin_EXPORTED_TARGETS} ${MPRT_EXPORTED_TARGETS})
+target_link_libraries(mrpt_local_obstacles_nodelet_pcl
+${INCLUDE} ${MRPT_LIBRARIES} ${catkin_LIBRARIES} 
+${PCL_LIBRARIES})
 
 ## Declare a cpp executable
 
